@@ -1,20 +1,21 @@
-import { type User, type InsertUser } from "@shared/schema";
+import { type User, type InsertUser, type PaymentRequest, type CashReceiptRequest } from "@shared/schema";
 import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  savePaymentRequest(request: PaymentRequest & { mulNo?: string }): Promise<void>;
+  getPaymentByMulNo(mulNo: string): Promise<(PaymentRequest & { mulNo?: string }) | undefined>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
+  private payments: Map<string, PaymentRequest & { mulNo?: string }>;
 
   constructor() {
     this.users = new Map();
+    this.payments = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -32,6 +33,16 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async savePaymentRequest(request: PaymentRequest & { mulNo?: string }): Promise<void> {
+    if (request.mulNo) {
+      this.payments.set(request.mulNo, request);
+    }
+  }
+
+  async getPaymentByMulNo(mulNo: string): Promise<(PaymentRequest & { mulNo?: string }) | undefined> {
+    return this.payments.get(mulNo);
   }
 }
 
