@@ -1,21 +1,73 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, index, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
+// Session storage table (required for Replit Auth)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// User storage table (required for Replit Auth)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  isAdmin: boolean("is_admin").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// Orders table for purchase history
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  datasetId: varchar("dataset_id").notNull(),
+  goodName: text("good_name").notNull(),
+  price: integer("price").notNull(),
+  buyerPhone: varchar("buyer_phone").notNull(),
+  mulNo: varchar("mul_no"),
+  paymentStatus: varchar("payment_status").default("pending"), // pending, completed, failed
+  receiptType: varchar("receipt_type"), // none, personal, business
+  businessNumber: varchar("business_number"),
+  deliveryStatus: varchar("delivery_status").default("pending"), // pending, delivered
+  deliveryUrl: text("delivery_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof orders.$inferSelect;
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  orders: many(orders),
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  user: one(users, {
+    fields: [orders.userId],
+    references: [users.id],
+  }),
+}));
 
 // Dataset definition
 export interface Dataset {
@@ -32,6 +84,7 @@ export interface Dataset {
   updateFrequency: string;
   features: string[];
   sampleFields: { name: string; type: string; description: string }[];
+  sampleData?: Record<string, any>[];
 }
 
 // Payment request schema
@@ -65,7 +118,7 @@ export const cashReceiptSchema = z.object({
 
 export type CashReceiptRequest = z.infer<typeof cashReceiptSchema>;
 
-// Static dataset data
+// Static dataset data with sample data for preview
 export const datasets: Dataset[] = [
   {
     id: "financial-sentiment",
@@ -92,6 +145,13 @@ export const datasets: Dataset[] = [
       { name: "sentiment_score", type: "float", description: "-1.0 to 1.0" },
       { name: "entities", type: "array", description: "Extracted entities" },
       { name: "published_at", type: "datetime", description: "Publication timestamp" }
+    ],
+    sampleData: [
+      { article_id: "FN-2024-001234", title: "Samsung Electronics Q4 Earnings Beat Expectations", sentiment_score: 0.82, entities: ["Samsung Electronics", "Q4 2024"], published_at: "2024-01-15T09:30:00Z" },
+      { article_id: "FN-2024-001235", title: "Federal Reserve Signals Potential Rate Cuts", sentiment_score: 0.45, entities: ["Federal Reserve", "Interest Rates"], published_at: "2024-01-15T10:15:00Z" },
+      { article_id: "FN-2024-001236", title: "Tech Sector Faces Regulatory Headwinds", sentiment_score: -0.31, entities: ["Tech Sector", "Regulation"], published_at: "2024-01-15T11:00:00Z" },
+      { article_id: "FN-2024-001237", title: "Hyundai Motor Reports Record EV Sales", sentiment_score: 0.76, entities: ["Hyundai Motor", "Electric Vehicles"], published_at: "2024-01-15T12:30:00Z" },
+      { article_id: "FN-2024-001238", title: "Global Supply Chain Disruptions Continue", sentiment_score: -0.58, entities: ["Supply Chain", "Logistics"], published_at: "2024-01-15T14:00:00Z" }
     ]
   },
   {
@@ -119,6 +179,13 @@ export const datasets: Dataset[] = [
       { name: "category_code", type: "string", description: "Business category" },
       { name: "foot_traffic", type: "integer", description: "Daily visitors estimate" },
       { name: "verified_at", type: "datetime", description: "Last verification date" }
+    ],
+    sampleData: [
+      { poi_id: "POI-KR-SEL-00001", name: "Gangnam Station Shopping Complex", coordinates: { lat: 37.4979, lng: 127.0276 }, category_code: "RETAIL_SHOPPING", foot_traffic: 45000, verified_at: "2024-01-10" },
+      { poi_id: "POI-KR-SEL-00002", name: "Coex Convention Center", coordinates: { lat: 37.5126, lng: 127.0590 }, category_code: "CONVENTION_CENTER", foot_traffic: 28000, verified_at: "2024-01-12" },
+      { poi_id: "POI-KR-SEL-00003", name: "Lotte Tower Observatory", coordinates: { lat: 37.5126, lng: 127.1025 }, category_code: "TOURISM_ATTRACTION", foot_traffic: 15000, verified_at: "2024-01-11" },
+      { poi_id: "POI-JP-TKY-00001", name: "Shibuya Crossing District", coordinates: { lat: 35.6595, lng: 139.7004 }, category_code: "RETAIL_ENTERTAINMENT", foot_traffic: 250000, verified_at: "2024-01-09" },
+      { poi_id: "POI-JP-TKY-00002", name: "Tokyo Station Marunouchi", coordinates: { lat: 35.6812, lng: 139.7671 }, category_code: "TRANSPORT_HUB", foot_traffic: 450000, verified_at: "2024-01-08" }
     ]
   },
   {
@@ -146,6 +213,13 @@ export const datasets: Dataset[] = [
       { name: "purchase_intent", type: "float", description: "0.0 to 1.0 score" },
       { name: "segments", type: "array", description: "User cohort labels" },
       { name: "ltv_estimate", type: "float", description: "Lifetime value prediction" }
+    ],
+    sampleData: [
+      { session_id: "SES-A7B2C9D4", journey_events: ["homepage", "category_electronics", "product_view", "add_to_cart"], purchase_intent: 0.89, segments: ["tech_enthusiast", "high_value"], ltv_estimate: 2450000 },
+      { session_id: "SES-E5F1G8H3", journey_events: ["search", "product_view", "compare", "product_view"], purchase_intent: 0.67, segments: ["price_conscious", "researcher"], ltv_estimate: 890000 },
+      { session_id: "SES-I2J6K0L4", journey_events: ["homepage", "promotions", "category_fashion"], purchase_intent: 0.34, segments: ["casual_browser", "deal_seeker"], ltv_estimate: 320000 },
+      { session_id: "SES-M9N3O7P1", journey_events: ["direct_product", "add_to_cart", "checkout", "purchase"], purchase_intent: 0.98, segments: ["loyal_customer", "brand_advocate"], ltv_estimate: 4200000 },
+      { session_id: "SES-Q5R8S2T6", journey_events: ["mobile_app", "wishlist", "price_alert"], purchase_intent: 0.52, segments: ["mobile_first", "waiting_for_sale"], ltv_estimate: 680000 }
     ]
   }
 ];

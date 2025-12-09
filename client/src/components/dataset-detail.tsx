@@ -89,6 +89,7 @@ export function DatasetDetail({ dataset, onPurchase }: DatasetDetailProps) {
           <TabsList className="w-full justify-start">
             <TabsTrigger value="overview" data-testid="tab-overview">개요</TabsTrigger>
             <TabsTrigger value="schema" data-testid="tab-schema">스키마</TabsTrigger>
+            <TabsTrigger value="preview" data-testid="tab-preview">샘플 데이터</TabsTrigger>
             <TabsTrigger value="features" data-testid="tab-features">기능</TabsTrigger>
           </TabsList>
           

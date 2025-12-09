@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { paymentRequestSchema, cashReceiptSchema, datasets } from "@shared/schema";
 import { z } from "zod";
 
@@ -18,11 +19,23 @@ async function parsePayAppResponse(text: string): Promise<Record<string, string>
   return result;
 }
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // Setup auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Dataset routes
   app.get("/api/datasets", (_req, res) => {
     res.json(datasets);
   });
@@ -35,7 +48,20 @@ export async function registerRoutes(
     res.json(dataset);
   });
 
-  app.post("/api/payment/request", async (req, res) => {
+  // Dataset preview/sample data
+  app.get("/api/datasets/:id/preview", (req, res) => {
+    const dataset = datasets.find((d) => d.id === req.params.id);
+    if (!dataset) {
+      return res.status(404).json({ message: "Dataset not found" });
+    }
+    res.json({
+      sampleFields: dataset.sampleFields,
+      sampleData: dataset.sampleData || [],
+    });
+  });
+
+  // Payment routes
+  app.post("/api/payment/request", async (req: any, res) => {
     try {
       const validatedData = paymentRequestSchema.parse(req.body);
       
@@ -43,6 +69,9 @@ export async function registerRoutes(
       if (!dataset) {
         return res.status(404).json({ success: false, message: "Dataset not found" });
       }
+
+      // Get user ID if authenticated
+      const userId = req.user?.claims?.sub || null;
 
       const feedbackUrl = `${req.protocol}://${req.get("host")}/api/payment/callback`;
       
@@ -71,9 +100,18 @@ export async function registerRoutes(
       const result = await parsePayAppResponse(responseText);
 
       if (result.state === "1") {
-        await storage.savePaymentRequest({
-          ...validatedData,
+        // Save order to database
+        await storage.createOrder({
+          userId,
+          datasetId: validatedData.datasetId,
+          goodName: validatedData.goodName,
+          price: validatedData.price,
+          buyerPhone: validatedData.buyerPhone,
           mulNo: result.mul_no,
+          receiptType: validatedData.receiptType || "none",
+          businessNumber: validatedData.businessNumber,
+          paymentStatus: "pending",
+          deliveryStatus: "pending",
         });
 
         res.json({
@@ -111,23 +149,35 @@ export async function registerRoutes(
       if (pay_state === "4") {
         console.log(`Payment completed for mul_no: ${mul_no}`);
         
-        const paymentRecord = await storage.getPaymentByMulNo(mul_no);
+        // Update order status
+        const order = await storage.updateOrderStatus(mul_no, "completed", new Date());
         
-        if (paymentRecord && var2 && var2 !== "none" && (var2 === "personal" || var2 === "business")) {
-          const idInfo = var2 === "business" ? var3 : paymentRecord.buyerPhone;
+        if (order && var2 && var2 !== "none" && (var2 === "personal" || var2 === "business")) {
+          const idInfo = var2 === "business" ? var3 : order.buyerPhone;
           const valType = var2 === "business" ? "2" : "1";
 
           try {
             await issueCashReceipt({
               idInfo,
-              price: paymentRecord.price,
+              price: order.price,
               valType,
-              goodName: paymentRecord.goodName,
-              buyerPhone: paymentRecord.buyerPhone,
+              goodName: order.goodName,
+              buyerPhone: order.buyerPhone,
             });
             console.log("Cash receipt issued successfully");
           } catch (receiptError) {
             console.error("Failed to issue cash receipt:", receiptError);
+          }
+        }
+
+        // Generate download URL for completed payment
+        if (order) {
+          const dataset = datasets.find(d => d.id === order.datasetId);
+          if (dataset) {
+            // Simulate delivery URL generation
+            const deliveryUrl = `/api/datasets/${order.datasetId}/download?order=${order.id}`;
+            await storage.updateOrderDelivery(order.id, deliveryUrl);
+            console.log(`Delivery URL generated: ${deliveryUrl}`);
           }
         }
       }
@@ -139,6 +189,54 @@ export async function registerRoutes(
     }
   });
 
+  // User orders (purchase history)
+  app.get("/api/orders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orders = await storage.getUserOrders(userId);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Admin routes
+  app.get("/api/admin/orders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching admin orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/admin/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const stats = await storage.getOrderStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // Cash receipt issuance
   app.post("/api/receipt/issue", async (req, res) => {
     try {
       const validatedData = cashReceiptSchema.parse(req.body);
@@ -170,6 +268,29 @@ export async function registerRoutes(
         message: "서버 오류가 발생했습니다.",
       });
     }
+  });
+
+  // Dataset search
+  app.get("/api/datasets/search", (req, res) => {
+    const { q, category } = req.query;
+    let results = [...datasets];
+
+    if (q && typeof q === "string") {
+      const query = q.toLowerCase();
+      results = results.filter(d => 
+        d.name.toLowerCase().includes(query) ||
+        d.nameKo.includes(query) ||
+        d.description.toLowerCase().includes(query) ||
+        d.descriptionKo.includes(query) ||
+        d.category.toLowerCase().includes(query)
+      );
+    }
+
+    if (category && typeof category === "string") {
+      results = results.filter(d => d.category.toLowerCase() === category.toLowerCase());
+    }
+
+    res.json(results);
   });
 
   return httpServer;
