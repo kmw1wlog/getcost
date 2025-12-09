@@ -1,0 +1,106 @@
+데이터셋 판매만 전문적으로 하는 기업이, 데이터를 파는 html기반 사이트를 만들어.
+1)
+메인 메뉴에 3가지 메인 데이터가 보이는 버튼을 세로로 나열하여 만든 뒤,
+매우 전문성을 가진 데이터 명을 달아.
+2)
+아래 결제 pg사 연동 코드가 버튼을 클릭하면 연동되게 해. 
+(일단 지금은 테스트용 연동코드임.)
+import requests
+
+class PayAppService:
+    def __init__(self, user_id):
+        self.base_url = "https://api.payapp.kr/oapi/apiLoad.html"
+        self.user_id = user_id  # 페이앱 가입 시 받은 판매자 ID
+
+    # 1. 결제 요청하기 (돈 받기)
+    def request_payment(self, good_name, price, buyer_phone):
+        """
+        고객에게 결제 요청(SMS발송 또는 결제창 호출)을 보냅니다.
+        """
+        data = {
+            "cmd": "payrequest",            # 결제 요청 명령어
+            "userid": self.user_id,         # 판매자 ID
+            "goodname": good_name,          # 상품명
+            "price": str(price),            # 결제 금액 (원 단위)
+            "recvphone": buyer_phone,       # 구매자 휴대폰 번호 (결제 링크 전송용)
+            "smsuse": "n",                  # y: 문자로 링크 전송, n: 리턴값으로 링크만 받기
+            "feedbackurl": "https://myserver.com/pay/callback", # [중요] 결제 완료 시 알림 받을 내 서버 주소
+            "var1": "user_12345"            # (선택) 내 서버에서 회원을 구분할 ID 등을 넣음
+        }
+
+        try:
+            response = requests.post(self.base_url, data=data)
+            result = self._parse_response(response.text)
+            
+            if result.get("state") == "1":
+                print(f"✅ 결제 요청 성공!")
+                print(f"결제 링크: {result.get('payurl')}")
+                return result.get('mul_no') # 페이앱에서 발급한 결제 번호 (추후 조회용)
+            else:
+                print(f"❌ 결제 요청 실패: {result.get('msg')}")
+                return None
+
+        except Exception as e:
+            print(f"에러 발생: {e}")
+            return None
+
+    # 2. 현금영수증 발행하기
+    def issue_cash_receipt(self, id_info, price, val_type="1"):
+        """
+        결제가 확인된 후 현금영수증을 발행합니다.
+        val_type: "1" (소득공제용-개인), "2" (지출증빙용-사업자)
+        """
+        data = {
+            "cmd": "cashreceipt_regist",    # 현금영수증 발행 명령어
+            "userid": self.user_id,
+            "good_name": "서비스 이용료",    # 상품명
+            "buy_tel": "010-0000-0000",     # (필수) 구매자 연락처
+            "id_info": id_info,             # (중요) 상대방 휴대폰번호 or 사업자번호
+            "price": str(price),            # 발행 금액
+            "val_type": val_type            # 1: 소득공제, 2: 지출증빙
+        }
+
+        try:
+            response = requests.post(self.base_url, data=data)
+            result = self._parse_response(response.text)
+
+            if result.get("state") == "1":
+                print(f"✅ 현금영수증 발행 성공! (용도: {'지출증빙' if val_type=='2' else '소득공제'})")
+            else:
+                print(f"❌ 현금영수증 발행 실패: {result.get('msg')}")
+
+        except Exception as e:
+            print(f"에러 발생: {e}")
+
+    # 응답 데이터 파싱 헬퍼 함수
+    def _parse_response(self, text):
+        # 페이앱은 응답을 "state=1&msg=성공..." 형태의 문자열로 줌
+        result = {}
+        for item in text.split('&'):
+            if '=' in item:
+                key, value = item.split('=', 1)
+                result[key] = value
+        return result
+
+# --- 사용 예시 ---
+if __name__ == "__main__":
+    # 1. 내 페이앱 아이디 설정
+    my_payapp = PayAppService(user_id="payapp_test_id")
+
+    # 2. 결제 요청 (고객에게 55,000원 결제 링크 생성)
+    # 실제로는 앱에서 이 링크를 웹뷰로 띄우거나 문자로 보냅니다.
+    pay_req_result = my_payapp.request_payment(
+        good_name="프리미엄 구독",
+        price=55000,
+        buyer_phone="010-1234-5678"
+    )
+
+    # 3. (가정) 고객이 결제를 완료했다고 가정하고 현금영수증 발행
+    # 실제로는 결제 완료 콜백(feedbackurl)을 받았을 때 실행해야 합니다.
+    if pay_req_result:
+        # 상대방이 사업자라서 '지출증빙(2)'을 요청한 경우
+        my_payapp.issue_cash_receipt(
+            id_info="123-45-67890", # 상대방 사업자 번호
+            price=55000,
+            val_type="2"
+        )
