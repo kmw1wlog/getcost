@@ -42,7 +42,7 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
           프리미엄 기업용 데이터셋
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          금융 분석, 위치 기반 서비스, 소비자 행동 분석을 위한 
+          금융 분석, 위치 기반 서비스, 소비자 행동 분석을 위한
           고품질 데이터셋을 제공합니다. 업계 최고 수준의 정확도와 신뢰성을 보장합니다.
         </p>
       </div>
@@ -93,7 +93,7 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
               Analytics: Database,
             };
             const Icon = icons[dataset.category] || Database;
-            
+
             return (
               <Card
                 key={dataset.id}
@@ -141,7 +141,7 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
 
       <div className="text-center py-8 border-t">
         <p className="text-sm text-muted-foreground">
-          데이터 구매 관련 문의: support@datavault.pro
+          데이터 구매 관련 문의: support@wise itech.pro
         </p>
       </div>
     </div>

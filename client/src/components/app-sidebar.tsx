@@ -26,7 +26,7 @@ export function AppSidebar({ selectedDataset, onSelectDataset }: AppSidebarProps
             <Database className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-semibold text-lg text-sidebar-foreground">DataVault Pro</h1>
+            <h1 className="font-semibold text-lg text-sidebar-foreground">wise itech Pro</h1>
             <p className="text-xs text-muted-foreground">Enterprise Data Marketplace</p>
           </div>
         </div>
@@ -56,7 +56,7 @@ export function AppSidebar({ selectedDataset, onSelectDataset }: AppSidebarProps
         <Separator className="mb-4" />
         <div className="space-y-3">
           <a
-            href="mailto:support@datavault.pro"
+            href="mailto:support@wise itech.pro"
             className="flex items-center gap-2 text-sm text-muted-foreground hover-elevate p-2 rounded-md"
             data-testid="link-support"
           >

@@ -20,15 +20,22 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
+  let sessionStore;
+
+  if (process.env.DATABASE_URL) {
+    const pgStore = connectPg(session);
+    sessionStore = new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: false,
+      ttl: sessionTtl,
+      tableName: "sessions",
+    });
+  } else {
+    sessionStore = new session.MemoryStore();
+  }
+
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "dev-secret-key",
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
@@ -63,6 +70,44 @@ async function upsertUser(
 }
 
 export async function setupAuth(app: Express) {
+  if (!process.env.REPL_ID) {
+    // Local dev mock auth
+    app.set("trust proxy", 1);
+    app.use(getSession());
+    app.use(async (req, res, next) => {
+      // Mock authenticated user
+      const mockUser = {
+        claims: {
+          sub: "local-dev-user",
+          email: "dev@local.com",
+          first_name: "Local",
+          last_name: "Developer",
+        },
+        expires_at: Math.floor(Date.now() / 1000) + 86400,
+      };
+
+      // Monkey patch isAuthenticated
+      req.isAuthenticated = (() => true) as any;
+      req.user = mockUser;
+
+      // Ensure user exists in storage
+      await storage.upsertUser({
+        id: "local-dev-user",
+        email: "dev@local.com",
+        firstName: "Local",
+        lastName: "Developer",
+        isAdmin: true
+      });
+
+      next();
+    });
+
+    // Mock login/logout routes
+    app.get("/api/login", (req, res) => res.redirect("/"));
+    app.get("/api/logout", (req, res) => res.redirect("/"));
+    return;
+  }
+
   app.set("trust proxy", 1);
   app.use(getSession());
   app.use(passport.initialize());
@@ -131,6 +176,7 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  if (!process.env.REPL_ID) return next();
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user.expires_at) {
