@@ -1,4 +1,4 @@
-import { Database, Mail, FileText, Shield } from "lucide-react";
+import { Mail, FileText, Shield } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,16 +20,13 @@ interface AppSidebarProps {
 export function AppSidebar({ selectedDataset, onSelectDataset }: AppSidebarProps) {
   return (
     <Sidebar>
-      <SidebarHeader className="p-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md bg-primary flex items-center justify-center">
-            <Database className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-semibold text-lg text-sidebar-foreground">wise itech Pro</h1>
-            <p className="text-xs text-muted-foreground">Enterprise Data Marketplace</p>
-          </div>
-        </div>
+      <SidebarHeader className="h-20 px-4 py-3 flex items-center">
+        <img
+          src="/wiseitech-dark.png?v=1"
+          alt="WISE iTECH"
+          className="h-12 w-auto"
+          loading="lazy"
+        />
       </SidebarHeader>
 
       <Separator />
