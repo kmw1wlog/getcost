@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import type { Dataset } from "@shared/schema";
 
 interface DatasetDetailProps {
@@ -20,6 +21,25 @@ const categoryIcons: Record<string, typeof Database> = {
 
 export function DatasetDetail({ dataset, onPurchase }: DatasetDetailProps) {
   const Icon = categoryIcons[dataset.category] || Database;
+  const modelOutputConfig: Record<
+    string,
+    { gif: string; caption: string }
+  > = {
+    "cinematic-camera-motion-kit": {
+      gif: "/3D01.gif",
+      caption: "카메라 경로·이징·FOV 샘플 출력",
+    },
+    "procedural-geometry-recognition": {
+      gif: "/3D02.gif",
+      caption: "폐곡면/기하 생성·인식 예시",
+    },
+    "spatial-perception-weights": {
+      gif: "/3D03.gif",
+      caption: "공간 지각·구도 품질 샘플",
+    },
+  };
+  const hasModelOutput = Boolean(modelOutputConfig[dataset.id]);
+  const defaultTab = hasModelOutput ? "model-output" : "overview";
   
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("ko-KR", {
@@ -85,13 +105,36 @@ export function DatasetDetail({ dataset, onPurchase }: DatasetDetailProps) {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="w-full justify-start">
+            {hasModelOutput && (
+              <TabsTrigger value="model-output" data-testid="tab-model-output">
+                모델 출력
+              </TabsTrigger>
+            )}
             <TabsTrigger value="overview" data-testid="tab-overview">개요</TabsTrigger>
             <TabsTrigger value="schema" data-testid="tab-schema">스키마</TabsTrigger>
             <TabsTrigger value="preview" data-testid="tab-preview">샘플 데이터</TabsTrigger>
             <TabsTrigger value="features" data-testid="tab-features">기능</TabsTrigger>
           </TabsList>
+          
+          {hasModelOutput && (
+            <TabsContent value="model-output" className="mt-6">
+              <div className="space-y-2">
+                <AspectRatio ratio={4 / 3} className="overflow-hidden rounded-md border border-border bg-black">
+                  <img
+                    src={modelOutputConfig[dataset.id].gif}
+                    alt="model output"
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </AspectRatio>
+                <p className="text-sm text-muted-foreground">
+                  {modelOutputConfig[dataset.id].caption}
+                </p>
+              </div>
+            </TabsContent>
+          )}
           
           <TabsContent value="overview" className="mt-6">
             <Card>

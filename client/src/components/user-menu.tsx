@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import type { User as UserType } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserMenuProps {
   user: UserType | undefined;
@@ -18,21 +19,24 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ user, isLoading }: UserMenuProps) {
+  const { storageKey } = useAuth();
+
   if (isLoading) {
     return <Skeleton className="h-9 w-9 rounded-full" />;
   }
 
   if (!user) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => window.location.href = "/api/login"}
-        data-testid="button-login"
-      >
-        <LogIn className="h-4 w-4 mr-2" />
-        로그인
-      </Button>
+      <Link href="/login">
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="button-login"
+        >
+          <LogIn className="h-4 w-4 mr-2" />
+          로그인
+        </Button>
+      </Link>
     );
   }
 
@@ -80,7 +84,12 @@ export function UserMenu({ user, isLoading }: UserMenuProps) {
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => window.location.href = "/api/logout"}
+          onClick={() => {
+            localStorage.removeItem("mockUser"); // legacy cleanup
+            localStorage.removeItem(storageKey);
+            window.dispatchEvent(new Event("auth-changed"));
+            window.location.href = "/";
+          }}
           data-testid="button-logout"
         >
           <LogOut className="h-4 w-4 mr-2" />

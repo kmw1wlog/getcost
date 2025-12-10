@@ -19,6 +19,19 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
     setIsPaymentOpen(true);
   };
 
+  const scrollToCatalog = () => {
+    try {
+      const el = document.getElementById("catalog-section");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (error) {
+      console.error("catalog scroll failed", error);
+    }
+  };
+
+  const popular = datasets.slice(0, 3);
+
   if (selectedDataset) {
     return (
       <>
@@ -33,34 +46,28 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
   }
 
   return (
-    <div className="pb-8">
-      {/* Hero Section with negative margins to extend full width */}
-      <div
-        className="-mx-6 -mt-6 lg:-mx-8 lg:-mt-8 mb-12 relative bg-cover bg-center bg-no-repeat overflow-hidden"
-        style={{ backgroundImage: 'url("/hero-bg.png")' }}
-      >
-        {/* Dark overlay for contrast */}
-        <div className="absolute inset-0 bg-black/60" />
-
-        {/* Gradient fade to background at the bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-b from-transparent to-background" />
-
-        {/* Hero Content */}
-        <div className="relative z-10 max-w-4xl mx-auto px-6 lg:px-8 py-20 text-center">
-          <Badge variant="secondary" className="mb-4 bg-white/10 text-white hover:bg-white/20 border-none">
+    <div className="pb-8 bg-[#0b0b0b]">
+      {/* Hero Section solid dark background */}
+      <div className="mb-6 bg-[#0b0b0b]">
+        <div className="max-w-4xl mx-auto px-6 lg:px-8 py-12 text-center space-y-4">
+          <Badge variant="secondary" className="inline-block">
             Enterprise Data Platform
           </Badge>
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground">
             프리미엄 기업용 데이터셋
           </h1>
-          <p className="text-lg md:text-xl text-gray-200 max-w-2xl mx-auto leading-relaxed">
-            금융 분석, 위치 기반 서비스, 소비자 행동 분석을 위한
-            고품질 데이터셋을 제공합니다. 업계 최고 수준의 정확도와 신뢰성을 보장합니다.
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            금융 분석, 위치 기반 서비스, 소비자 행동 분석을 위한 고품질 데이터셋을 제공합니다. 업계 최고 수준의 정확도와 신뢰성을 보장합니다.
           </p>
+          <div className="flex justify-center pt-2">
+            <Button size="lg" className="w-full sm:w-auto" onClick={scrollToCatalog}>
+              데이터 카탈로그 보기
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
           <Card className="text-center p-6">
             <CardContent className="p-0">
@@ -97,10 +104,12 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
           </Card>
         </div>
 
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold mb-6">인기 데이터셋</h2>
+        <div id="catalog-section" className="mb-10">
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <h2 className="text-2xl font-semibold">인기 데이터셋</h2>
+          </div>
           <div className="grid gap-4">
-            {datasets.map((dataset) => {
+            {popular.map((dataset) => {
               const icons: Record<string, typeof Database> = {
                 Finance: BarChart3,
                 Geospatial: MapPin,
@@ -151,12 +160,6 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
               );
             })}
           </div>
-        </div>
-
-        <div className="text-center py-8 border-t">
-          <p className="text-sm text-muted-foreground">
-            데이터 구매 관련 문의: support@wise itech.pro
-          </p>
         </div>
       </div>
     </div>

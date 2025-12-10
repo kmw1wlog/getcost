@@ -1,8 +1,8 @@
-# wise itech Pro - Enterprise Data Marketplace
+# 위세아이텍 - Enterprise Data Marketplace
 
 ## Overview
 
-wise itech Pro is a B2B enterprise data marketplace platform that sells premium datasets for financial analysis, geospatial intelligence, and consumer behavior analytics. The platform features a professional, trust-focused design aimed at data professionals and enterprises. It integrates with PayApp (Korean payment gateway) for processing dataset purchases and includes cash receipt issuance functionality.
+위세아이텍 is a B2B enterprise data marketplace platform that sells premium datasets for financial analysis, geospatial intelligence, and consumer behavior analytics. The platform features a professional, trust-focused design aimed at data professionals and enterprises. It integrates with PayApp (Korean payment gateway) for processing dataset purchases and includes cash receipt issuance functionality.
 
 ## User Preferences
 

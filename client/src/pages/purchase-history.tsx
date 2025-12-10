@@ -98,12 +98,12 @@ export default function PurchaseHistory() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-16">
       <h1 className="text-2xl font-bold mb-6" data-testid="text-page-title">구매 내역</h1>
       
       {!orders || orders.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
+          <CardContent className="flex flex-col items-center justify-center py-14">
             <Package className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground">아직 구매 내역이 없습니다.</p>
           </CardContent>
@@ -141,6 +141,7 @@ export default function PurchaseHistory() {
           ))}
         </div>
       )}
+      <div className="h-12" />
     </div>
   );
 }
