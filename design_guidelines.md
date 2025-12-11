@@ -1,8 +1,8 @@
-# Design Guidelines: Professional Data Marketplace
+# Design Guidelines: Professional Data asset
 
 ## Design Approach
 
-**Hybrid Reference-Based System**: Drawing from enterprise SaaS platforms (Stripe, Linear, AWS Marketplace) with emphasis on trust, professionalism, and data clarity. This is a B2B platform requiring credibility signals and efficient information architecture.
+**Hybrid Reference-Based System**: Drawing from enterprise SaaS platforms (Stripe, Linear, AWS asset) with emphasis on trust, professionalism, and data clarity. This is a B2B platform requiring credibility signals and efficient information architecture.
 
 ## Core Design Principles
 
@@ -49,7 +49,7 @@
 - Bottom section: support contact, documentation link
 
 **Main Content Area** (Right side, scrollable):
-- Hero section introducing the data marketplace value proposition
+- Hero section introducing the data asset value proposition
 - Dataset detail section (when selected)
 - Trust indicators: client logos, security certifications, data samples
 - Footer with legal, privacy, terms

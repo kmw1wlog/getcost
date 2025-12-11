@@ -66,6 +66,14 @@ export function AppSidebar({ selectedDataset, onSelectDataset }: AppSidebarProps
       <SidebarFooter className="p-4 mt-auto">
         <Separator className="mb-4" />
         <div className="space-y-2">
+          <Link
+            href="/docs"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover-elevate p-2 rounded-md"
+            data-testid="link-docs-hub"
+          >
+            <Shield className="w-4 h-4 text-primary" />
+            문서 센터
+          </Link>
           <a
             href="https://wise.co.kr/customer/inquiry.do"
             className="flex items-center gap-2 text-sm text-muted-foreground hover-elevate p-2 rounded-md"

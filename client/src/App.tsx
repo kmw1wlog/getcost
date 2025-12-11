@@ -14,6 +14,15 @@ import PurchaseHistory from "@/pages/purchase-history";
 import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Docs from "@/pages/docs";
+import TaxReceipt from "@/pages/docs/TaxReceipt";
+import RefundPolicy from "@/pages/docs/RefundPolicy";
+import Faq from "@/pages/docs/Faq";
+import Terms from "@/pages/docs/Terms";
+import Privacy from "@/pages/docs/Privacy";
+import Sla from "@/pages/docs/Sla";
+import SchemaGuide from "@/pages/docs/SchemaGuide";
+import Changelog from "@/pages/docs/Changelog";
 import type { Dataset } from "@shared/schema";
 
 function AppContent() {
@@ -70,6 +79,15 @@ function AppContent() {
                 />
               </Route>
               <Route path="/login" component={Login} />
+              <Route path="/docs" component={Docs} />
+              <Route path="/docs/tax" component={TaxReceipt} />
+              <Route path="/docs/refund" component={RefundPolicy} />
+              <Route path="/docs/faq" component={Faq} />
+              <Route path="/docs/terms" component={Terms} />
+              <Route path="/docs/privacy" component={Privacy} />
+              <Route path="/docs/sla" component={Sla} />
+              <Route path="/docs/schema" component={SchemaGuide} />
+              <Route path="/docs/changelog" component={Changelog} />
               <Route path="/purchases" component={PurchaseHistory} />
               <Route path="/admin" component={AdminDashboard} />
               <Route component={NotFound} />
