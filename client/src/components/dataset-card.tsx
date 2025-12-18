@@ -1,8 +1,9 @@
-import { Database, MapPin, BarChart3, ChevronRight } from "lucide-react";
+import { Database, MapPin, BarChart3, ShoppingCart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Dataset } from "@shared/schema";
+import { useCart } from "@/hooks/useCart";
 
 interface DatasetCardProps {
   dataset: Dataset;
@@ -18,6 +19,7 @@ const categoryIcons: Record<string, typeof Database> = {
 
 export function DatasetCard({ dataset, isSelected, onSelect }: DatasetCardProps) {
   const Icon = categoryIcons[dataset.category] || Database;
+  const { addItem } = useCart();
   
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("ko-KR", {
@@ -61,10 +63,28 @@ export function DatasetCard({ dataset, isSelected, onSelect }: DatasetCardProps)
               <span className="font-mono text-lg font-semibold text-foreground">
                 {formatPrice(dataset.price)}
               </span>
-              <Button size="sm" variant={isSelected ? "default" : "outline"}>
-                {isSelected ? "선택됨" : "상세보기"}
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(dataset);
+                  }}
+                >
+                  상세보기
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addItem({ id: dataset.id, name: dataset.nameKo, price: dataset.price });
+                  }}
+                >
+                  <ShoppingCart className="w-4 h-4 mr-1" />
+                  담기
+                </Button>
+              </div>
             </div>
           </div>
         </div>

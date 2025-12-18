@@ -189,6 +189,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // PayApp Lite feedback (테스트 모드: 금액 검증 스킵)
+  app.post("/api/payapp/feedback", async (req, res) => {
+    try {
+      const { pay_state, price, mul_no, goodname, recvphone, var1 } = req.body;
+
+      if (pay_state === "4") {
+        // 기존 주문이 있으면 완료 처리, 없으면 최소 정보로 생성 후 완료 처리
+        const existing = mul_no ? await storage.getOrderByMulNo(mul_no) : undefined;
+        if (existing) {
+          await storage.updateOrderStatus(mul_no, "completed", new Date());
+        } else if (mul_no) {
+          await storage.createOrder({
+            userId: null,
+            datasetId: var1 || "manual-test",
+            goodName: goodname || "장바구니 수동 결제 테스트",
+            price: Number(price) || 0,
+            buyerPhone: recvphone || "unknown",
+            mulNo: mul_no,
+            paymentStatus: "completed",
+            deliveryStatus: "pending",
+          });
+        }
+
+        console.log(`결제 성공: ${price}원 / 주문번호(mul_no): ${mul_no}`);
+        return res.send("SUCCESS");
+      }
+
+      return res.status(400).send("IGNORED");
+    } catch (error) {
+      console.error("PayApp feedback error:", error);
+      res.status(500).send("Error");
+    }
+  });
+
   // User orders (purchase history)
   app.get("/api/orders", isAuthenticated, async (req: any, res) => {
     try {

@@ -41,5 +41,13 @@ export function useAuth() {
     isAuthenticated: !!user,
     setUser,
     storageKey: STORAGE_KEY,
+    clearUser: () => {
+      localStorage.removeItem(STORAGE_KEY);
+      window.dispatchEvent(new Event("auth-changed"));
+    },
+    saveUser: (u: User) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      window.dispatchEvent(new Event("auth-changed"));
+    },
   };
 }

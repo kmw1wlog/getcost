@@ -1,4 +1,4 @@
-import { User, LogIn, LogOut, ShoppingBag, Settings } from "lucide-react";
+import { User, LogIn, LogOut, ShoppingBag, Settings, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import type { User as UserType } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { useCart } from "@/hooks/useCart";
 
 interface UserMenuProps {
   user: UserType | undefined;
@@ -19,7 +20,8 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ user, isLoading }: UserMenuProps) {
-  const { storageKey } = useAuth();
+  const { storageKey, clearUser } = useAuth();
+  const { totalCount } = useCart();
 
   if (isLoading) {
     return <Skeleton className="h-9 w-9 rounded-full" />;
@@ -68,6 +70,12 @@ export function UserMenu({ user, isLoading }: UserMenuProps) {
           </div>
         </div>
         <DropdownMenuSeparator />
+        <Link href="/cart">
+          <DropdownMenuItem data-testid="menu-cart">
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            장바구니 {totalCount > 0 ? `(${totalCount})` : ""}
+          </DropdownMenuItem>
+        </Link>
         <Link href="/purchases">
           <DropdownMenuItem data-testid="menu-purchases">
             <ShoppingBag className="h-4 w-4 mr-2" />
@@ -87,7 +95,7 @@ export function UserMenu({ user, isLoading }: UserMenuProps) {
           onClick={() => {
             localStorage.removeItem("mockUser"); // legacy cleanup
             localStorage.removeItem(storageKey);
-            window.dispatchEvent(new Event("auth-changed"));
+            clearUser();
             window.location.href = "/";
           }}
           data-testid="button-logout"

@@ -10,7 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const { storageKey } = useAuth();
+  const { storageKey, saveUser } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,8 +24,7 @@ export default function Login() {
       lastName: lastName.trim() || "",
       isAdmin: false,
     };
-    localStorage.setItem(storageKey, JSON.stringify(user));
-    window.dispatchEvent(new Event("auth-changed"));
+    saveUser(user as any);
     setLocation("/");
   };
 

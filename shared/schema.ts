@@ -595,5 +595,35 @@ export const datasets: Dataset[] = [
       { sku: "SKU-FA-0201", channel: "offline", price_krw: 89000, promotion_flag: false, availability: "limited" },
       { sku: "SKU-HM-1102", channel: "online", price_krw: 45000, promotion_flag: true, availability: "out_of_stock" }
     ]
+  },
+  {
+    id: "highres-3d-modeling",
+    name: "High-Resolution 3D Modeling Dataset",
+    nameKo: "3D 기하·장면 이해를 위한 고해상도 3D 모델링 학습 데이터셋",
+    description: "Watertight meshes, UVs, and scene graphs for 3D reconstruction and understanding tasks.",
+    descriptionKo: "3D 재구성·장면 이해용으로 워터타이트 메쉬, UV, 씬 그래프가 포함된 고해상도 데이터셋입니다.",
+    category: "Analytics",
+    price: 1270000,
+    records: "1.2M",
+    accuracy: "97.0%",
+    format: "OBJ, GLB, PLY",
+    updateFrequency: "Quarterly",
+    features: [
+      "Watertight meshes with normals/UVs",
+      "Instance-level scene graphs and materials",
+      "Camera poses with depth maps",
+      "Train/val/test splits for reconstruction"
+    ],
+    sampleFields: [
+      { name: "model_id", type: "string", description: "3D 모델 식별자" },
+      { name: "vertices", type: "array", description: "정점 리스트" },
+      { name: "faces", type: "array", description: "삼각형 인덱스" },
+      { name: "camera_pose", type: "object", description: "외인·내인 파라미터" },
+      { name: "scene_graph", type: "object", description: "객체/관계 그래프" }
+    ],
+    sampleData: [
+      { model_id: "HR3D-001", vertices: "[...]", faces: "[...]", camera_pose: { K: "...", Rt: "..." }, scene_graph: { nodes: 18, edges: 42 } },
+      { model_id: "HR3D-002", vertices: "[...]", faces: "[...]", camera_pose: { K: "...", Rt: "..." }, scene_graph: { nodes: 11, edges: 26 } }
+    ]
   }
 ];
