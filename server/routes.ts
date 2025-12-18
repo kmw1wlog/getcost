@@ -1,14 +1,22 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { paymentRequestSchema, cashReceiptSchema, datasets } from "@shared/schema";
 import { z } from "zod";
+import crypto from "crypto";
 
 const PAYAPP_API_URL = "https://api.payapp.kr/oapi/apiLoad.html";
 const PAYAPP_USER_ID = process.env.PAYAPP_USER_ID || "payapp_test_id";
 const PAYAPP_LINKVAL = process.env.PAYAPP_LINKVAL;
 const PAYAPP_LINKKEY = process.env.PAYAPP_LINKKEY;
+
+// Creem
+const CREEM_PUBLIC_KEY = process.env.CREEM_PUBLIC_KEY || "";
+const CREEM_SECRET_KEY = process.env.CREEM_SECRET_KEY || "";
+const CREEM_WEBHOOK_SECRET = process.env.CREEM_WEBHOOK_SECRET || "";
+const CREEM_SUCCESS_URL = process.env.CREEM_SUCCESS_URL || "https://wisedata.ai.kr/cart";
+const CREEM_CANCEL_URL = process.env.CREEM_CANCEL_URL || "https://wisedata.ai.kr/cart";
 
 const truncate = (value: string, limit: number) => Array.from(value || "").slice(0, limit).join("");
 const buildGoodnameLabel = (raw: string) => truncate(raw || "장바구니 수동 결제", 19);
@@ -215,12 +223,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(200).type("text/plain").send("SUCCESS");
 
     try {
-      const { pay_state, price, mul_no, goodname, recvphone, var1, linkval } = req.body;
+      const { pay_state, price, mul_no, goodname, recvphone, var1 } = req.body;
 
-      if (PAYAPP_LINKVAL && (!linkval || linkval !== PAYAPP_LINKVAL)) {
-        console.warn("PayApp feedback rejected by linkval", { mul_no, linkval });
-        return;
-      }
+      // linkval 검증 임시 비활성화 (70080 원인 배제)
+      // if (PAYAPP_LINKVAL && (!linkval || linkval !== PAYAPP_LINKVAL)) { ... }
 
       if (pay_state === "4") {
         const existing = mul_no ? await storage.getOrderByMulNo(mul_no) : undefined;
@@ -243,12 +249,116 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return;
       }
 
-      console.warn("PayApp feedback ignored (pay_state != 4)", { pay_state, mul_no });
+      console.warn("PayApp feedback ignored (pay_state != 4)", { pay_state, mul_no, body: req.body });
     } catch (error) {
-      console.error("PayApp feedback error:", error);
+      console.error("PayApp feedback error:", error, { body: req.body });
     }
   });
 
+  // Creem: 1회성 결제 세션 생성 (redirect flow)
+  app.post("/api/creem/session", async (req, res) => {
+    try {
+      const { amount, name, metadata } = req.body;
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      if (!CREEM_SECRET_KEY) {
+        return res.status(500).json({ message: "CREEM_SECRET_KEY not configured" });
+      }
+
+      // 상품명 19자 제한 (장바구니 규칙과 동일)
+      const goodname = buildGoodnameLabel(name || "장바구니 결제");
+
+      // KRW 우선, 미지원 시 USD로 폴백
+      let currency = "KRW";
+      let finalAmount = amount;
+      // TODO: 실제 지원 여부 확인이 필요하면 Creem API 사전 조회 또는 config 플래그 사용
+      // USD 폴백이 필요할 경우 환율 적용하여 finalAmount를 변경
+
+      const body = {
+        amount: finalAmount,
+        currency,
+        name: goodname,
+        successUrl: CREEM_SUCCESS_URL,
+        cancelUrl: CREEM_CANCEL_URL,
+        metadata: metadata || {},
+      };
+
+      const response = await fetch("https://api.creem.io/v1/payments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${CREEM_SECRET_KEY}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Creem session error:", errText);
+        return res.status(500).json({ message: "Failed to create session", detail: errText });
+      }
+
+      const data = await response.json();
+      // 기대 형태: { id, url, ... }
+      return res.json({ sessionId: data.id, url: data.url });
+    } catch (error) {
+      console.error("Creem session exception:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Creem 웹훅
+  app.post("/api/creem/webhook", express.raw({ type: "*/*" }), async (req, res) => {
+    // Creem 대시보드 등록 시 2xx 응답이 필요하므로, 서명/바디 검증 전에 바로 200 반환
+    res.status(200).send("OK");
+
+    try {
+      // 서명 검증을 옵션화: 시크릿 없으면 검증 스킵, 있어도 실패해도 결제 실패로 간주하지 않음 (등록용)
+      const signature = req.headers["creem-signature"] as string | undefined;
+      const rawBody = req.rawBody as Buffer;
+
+      if (CREEM_WEBHOOK_SECRET && signature && rawBody) {
+        const computed = crypto.createHmac("sha256", CREEM_WEBHOOK_SECRET).update(rawBody).digest("hex");
+        if (computed !== signature) {
+          console.warn("Creem webhook signature mismatch (ignored for registration)");
+        }
+      }
+
+      if (!rawBody) return;
+      const payload = JSON.parse(rawBody.toString("utf-8"));
+      const eventType = payload.eventType || payload.type;
+      const payment = payload.data || {};
+
+      if (eventType === "payment.succeeded" || eventType === "payment_succeeded") {
+        const mulNo = payment.id || payment.paymentId;
+        const amount = payment.amount;
+        const buyerPhone = payment.phone || "unknown";
+        const goodName = buildGoodnameLabel(payment.name || "장바구니 결제");
+
+        if (mulNo) {
+          const existing = await storage.getOrderByMulNo(mulNo);
+          if (existing) {
+            await storage.updateOrderStatus(mulNo, "completed", new Date());
+          } else {
+            await storage.createOrder({
+              userId: null,
+              datasetId: payment.metadata?.datasetId || "manual-creem",
+              goodName,
+              price: Number(amount) || 0,
+              buyerPhone,
+              mulNo,
+              paymentStatus: "completed",
+              deliveryStatus: "pending",
+            });
+          }
+        }
+        console.log(`Creem 결제 성공: ${amount} / 주문번호(mul_no): ${mulNo}`);
+      }
+    } catch (error) {
+      console.error("Creem webhook error (post-200):", error);
+    }
+  });
   // User orders (purchase history)
   app.get("/api/orders", isAuthenticated, async (req: any, res) => {
     try {

@@ -5,34 +5,12 @@ import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/useCart";
 import { useLocation } from "wouter";
 
-declare global {
-  interface Window {
-    PayApp?: {
-      setDefault: (key: string, value: string) => void;
-      setParam: (key: string, value: string) => void;
-      call: () => void;
-    };
-  }
-}
-
 export default function CartPage() {
   const { items, removeItem, clear, totalPrice } = useCart();
   const [, setLocation] = useLocation();
   const [manualAmount, setManualAmount] = useState<string>("1000");
 
   const truncate = (value: string, limit: number) => Array.from(value).slice(0, limit).join("");
-
-  const payappConfig = useMemo(
-    () => ({
-      userid: import.meta.env.VITE_PAYAPP_USERID || "wiseitech", // 실제 판매자 아이디 필수
-      shopname: import.meta.env.VITE_PAYAPP_SHOPNAME || "테스트상점", // 판매자 설정의 상점명
-      feedbackurl:
-        import.meta.env.VITE_PAYAPP_FEEDBACK_URL || `${window.location.origin}/api/payapp/feedback`,
-      recvphone: import.meta.env.VITE_PAYAPP_TEST_PHONE || "01012345678",
-      returnurl: import.meta.env.VITE_PAYAPP_RETURN_URL || `${window.location.origin}/home`,
-    }),
-    [],
-  );
 
   const buildGoodname = (cartItems: typeof items) => {
     if (!cartItems.length) return "장바구니 결제";
@@ -45,56 +23,25 @@ export default function CartPage() {
 
   const cartGoodname = useMemo(() => buildGoodname(items), [items]);
 
-  const setPayAppParams = (goodname: string, amount: number) => {
-    try {
-      if (!window.PayApp) return false;
-      const defaults = {
-        userid: payappConfig.userid,
-        shopname: payappConfig.shopname,
-        feedbackurl: payappConfig.feedbackurl,
-      };
-      const params = {
-        goodname,
-        price: amount.toString(),
-        recvphone: payappConfig.recvphone,
-        openpaytype: "card",
-        reqaddr: "0",
-        smsuse: "n",
-        redirectpay: "1",
-        skip_cstpage: "y",
-        returnurl: payappConfig.returnurl,
-      };
-      Object.entries(defaults).forEach(([key, value]) => window.PayApp?.setDefault(key, value));
-      Object.entries(params).forEach(([key, value]) => window.PayApp?.setParam(key, value));
-      window.PayApp?.call();
-      return true;
-    } catch (error) {
-      console.error("Failed to set PayApp params", error);
-      return false;
+  const createCreemSession = async (amount: number) => {
+    const res = await fetch("/api/creem/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        name: cartGoodname,
+        metadata: { cartCount: items.length },
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || "세션 생성 실패");
     }
+    return res.json() as Promise<{ url: string; sessionId?: string }>;
   };
 
-  useEffect(() => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src="//lite.payapp.kr/public/api/v2/payapp-lite.js"]',
-    );
-    if (existing) return;
-    const script = document.createElement("script");
-    script.src = "//lite.payapp.kr/public/api/v2/payapp-lite.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
-
-  const handleManualPay = () => {
+  const handleManualPay = async () => {
     try {
-      if (!window.PayApp) {
-        alert("PayApp 스크립트 로딩을 기다려주세요.");
-        return;
-      }
-      if (!payappConfig.userid || payappConfig.userid === "YOUR_PAYAPP_USERID") {
-        alert("PayApp 판매자 아이디(VITE_PAYAPP_USERID)가 설정되지 않았습니다.");
-        return;
-      }
       if (!items.length) {
         alert("장바구니가 비어 있습니다.");
         return;
@@ -104,11 +51,15 @@ export default function CartPage() {
         alert("결제 금액을 1원 이상으로 입력해주세요.");
         return;
       }
-      const prepared = setPayAppParams(cartGoodname, amount);
-      if (!prepared) alert("결제 준비에 실패했습니다. 다시 시도해주세요.");
+      const data = await createCreemSession(amount);
+      if (data.url) {
+        window.location.href = data.url; // Creem은 모달이 아니라 redirect
+      } else {
+        alert("결제 URL 생성에 실패했습니다.");
+      }
     } catch (error) {
       console.error("Manual pay failed", error);
-      alert("결제 준비 중 오류가 발생했습니다.");
+      alert("결제 준비 중 오류가 발생했습니다. 다시 시도해주세요.");
     }
   };
 
