@@ -209,19 +209,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PayApp Lite feedback (테스트 모드: 금액 검증 스킵)
-  app.post("/api/payapp/feedback", async (req, res) => {
+  app.all("/api/payapp/feedback", async (req, res) => {
+    // PayApp는 본문 'SUCCESS'(대문자) 응답을 보고 재시도 여부를 판단합니다.
+    // 어떤 메서드/바디가 와도 우선 200/SUCCESS를 반환해 70080을 방지합니다.
+    res.status(200).type("text/plain").send("SUCCESS");
+
     try {
       const { pay_state, price, mul_no, goodname, recvphone, var1, linkval } = req.body;
 
-      if (PAYAPP_LINKVAL) {
-        if (!linkval || linkval !== PAYAPP_LINKVAL) {
-          console.warn("PayApp feedback rejected: invalid linkval");
-          return res.status(403).send("INVALID_LINKVAL");
-        }
+      if (PAYAPP_LINKVAL && (!linkval || linkval !== PAYAPP_LINKVAL)) {
+        console.warn("PayApp feedback rejected by linkval", { mul_no, linkval });
+        return;
       }
 
       if (pay_state === "4") {
-        // 기존 주문이 있으면 완료 처리, 없으면 최소 정보로 생성 후 완료 처리
         const existing = mul_no ? await storage.getOrderByMulNo(mul_no) : undefined;
         if (existing) {
           await storage.updateOrderStatus(mul_no, "completed", new Date());
@@ -238,15 +239,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             deliveryStatus: "pending",
           });
         }
-
         console.log(`결제 성공: ${price}원 / 주문번호(mul_no): ${mul_no}`);
-        return res.send("SUCCESS");
+        return;
       }
 
-      return res.status(400).send("IGNORED");
+      console.warn("PayApp feedback ignored (pay_state != 4)", { pay_state, mul_no });
     } catch (error) {
       console.error("PayApp feedback error:", error);
-      res.status(500).send("Error");
     }
   });
 
