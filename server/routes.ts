@@ -7,6 +7,11 @@ import { z } from "zod";
 
 const PAYAPP_API_URL = "https://api.payapp.kr/oapi/apiLoad.html";
 const PAYAPP_USER_ID = process.env.PAYAPP_USER_ID || "payapp_test_id";
+const PAYAPP_LINKVAL = process.env.PAYAPP_LINKVAL;
+const PAYAPP_LINKKEY = process.env.PAYAPP_LINKKEY;
+
+const truncate = (value: string, limit: number) => Array.from(value || "").slice(0, limit).join("");
+const buildGoodnameLabel = (raw: string) => truncate(raw || "장바구니 수동 결제", 19);
 
 async function parsePayAppResponse(text: string): Promise<Record<string, string>> {
   const result: Record<string, string> = {};
@@ -206,7 +211,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PayApp Lite feedback (테스트 모드: 금액 검증 스킵)
   app.post("/api/payapp/feedback", async (req, res) => {
     try {
-      const { pay_state, price, mul_no, goodname, recvphone, var1 } = req.body;
+      const { pay_state, price, mul_no, goodname, recvphone, var1, linkval } = req.body;
+
+      if (PAYAPP_LINKVAL) {
+        if (!linkval || linkval !== PAYAPP_LINKVAL) {
+          console.warn("PayApp feedback rejected: invalid linkval");
+          return res.status(403).send("INVALID_LINKVAL");
+        }
+      }
 
       if (pay_state === "4") {
         // 기존 주문이 있으면 완료 처리, 없으면 최소 정보로 생성 후 완료 처리
@@ -214,7 +226,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (existing) {
           await storage.updateOrderStatus(mul_no, "completed", new Date());
         } else if (mul_no) {
-          const fallbackName = buildGoodname(goodname || "장바구니 수동 결제 테스트");
+          const fallbackName = buildGoodnameLabel(goodname || "장바구니 수동 결제 테스트");
           await storage.createOrder({
             userId: null,
             datasetId: var1 || "manual-test",

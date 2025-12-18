@@ -20,6 +20,8 @@ export default function CartPage() {
   const [, setLocation] = useLocation();
   const [manualAmount, setManualAmount] = useState<string>("1000");
 
+  const truncate = (value: string, limit: number) => Array.from(value).slice(0, limit).join("");
+
   const payappConfig = useMemo(
     () => ({
       userid: import.meta.env.VITE_PAYAPP_USERID || "wiseitech", // 실제 판매자 아이디 필수
@@ -33,28 +35,35 @@ export default function CartPage() {
   );
 
   const buildGoodname = (cartItems: typeof items) => {
-    try {
-      if (!cartItems.length) return "장바구니 비어 있음";
-      const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-      const firstName = cartItems[0].name || "장바구니 상품";
-      const firstLabel = firstName.length > 16 ? firstName.slice(0, 16) : firstName;
-      const othersCount = Math.max(totalQuantity - 1, 0);
-      const suffix = othersCount > 0 ? ` 그외+${othersCount}개` : "";
-      const combined = `${firstLabel}${suffix}`;
-      return combined.length > 20 ? combined.slice(0, 20) : combined;
-    } catch (error) {
-      console.error("Failed to build cart goodname", error);
-      return "장바구니 상품";
-    }
+    if (!cartItems.length) return "장바구니 결제";
+    const first = truncate(cartItems[0].name || "장바구니 상품", 14);
+    const others = cartItems.length - 1;
+    const suffix = others > 0 ? ` 그외${others}개` : "";
+    const combined = `${first}${suffix}`;
+    return truncate(combined, 19);
   };
 
   const cartGoodname = useMemo(() => buildGoodname(items), [items]);
 
-  const setPayAppParams = (goodname: string) => {
+  const setPayAppParams = (goodname: string, amount: number) => {
     try {
       if (!window.PayApp) return false;
-      const defaults = { userid: payappConfig.userid, shopname: payappConfig.shopname, feedbackurl: payappConfig.feedbackurl };
-      const params = { goodname, price: manualAmount || "0", recvphone: payappConfig.recvphone, openpaytype: "card", reqaddr: "0", smsuse: "n", redirectpay: "1", skip_cstpage: "y", returnurl: payappConfig.returnurl };
+      const defaults = {
+        userid: payappConfig.userid,
+        shopname: payappConfig.shopname,
+        feedbackurl: payappConfig.feedbackurl,
+      };
+      const params = {
+        goodname,
+        price: amount.toString(),
+        recvphone: payappConfig.recvphone,
+        openpaytype: "card",
+        reqaddr: "0",
+        smsuse: "n",
+        redirectpay: "1",
+        skip_cstpage: "y",
+        returnurl: payappConfig.returnurl,
+      };
       Object.entries(defaults).forEach(([key, value]) => window.PayApp?.setDefault(key, value));
       Object.entries(params).forEach(([key, value]) => window.PayApp?.setParam(key, value));
       window.PayApp?.call();
@@ -90,7 +99,12 @@ export default function CartPage() {
         alert("장바구니가 비어 있습니다.");
         return;
       }
-      const prepared = setPayAppParams(cartGoodname);
+      const amount = parseInt(manualAmount || "0", 10);
+      if (isNaN(amount) || amount <= 0) {
+        alert("결제 금액을 1원 이상으로 입력해주세요.");
+        return;
+      }
+      const prepared = setPayAppParams(cartGoodname, amount);
       if (!prepared) alert("결제 준비에 실패했습니다. 다시 시도해주세요.");
     } catch (error) {
       console.error("Manual pay failed", error);
