@@ -74,30 +74,32 @@ export function PaymentModal({ dataset, isOpen, onClose }: PaymentModalProps) {
   const receiptType = form.watch("receiptType");
 
   const paymentMutation = useMutation({
-    mutationFn: async (values: PaymentFormValues): Promise<{ success: boolean; payUrl?: string; mulNo?: string; message?: string }> => {
+    mutationFn: async (_values: PaymentFormValues): Promise<{ url: string }> => {
       if (!dataset) throw new Error("No dataset selected");
-      
-      const response = await apiRequest("POST", "/api/payment/request", {
-        datasetId: dataset.id,
-        goodName: buildGoodname(dataset.nameKo),
-        price: dataset.price,
-        buyerPhone: values.buyerPhone.replace(/-/g, ""),
-        receiptType: values.receiptType,
-        businessNumber: values.receiptType === "business" ? values.receiptNumber : undefined,
+
+      const response = await apiRequest("POST", "/api/creem/session", {
+        amount: dataset.price,
+        name: buildGoodname(dataset.nameKo),
+        metadata: { datasetId: dataset.id },
       });
-      
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "결제 세션 생성 실패");
+      }
+
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.payUrl) {
-        setPaymentUrl(data.payUrl);
-        setStep("success");
+      if (data.url) {
+        window.location.href = data.url; // Creem redirect
       } else {
         toast({
-          title: "결제 요청이 생성되었습니다",
-          description: "입력하신 휴대폰으로 결제 링크가 발송되었습니다.",
+          title: "결제 URL 생성 실패",
+          description: "다시 시도해주세요.",
+          variant: "destructive",
         });
-        setStep("success");
+        setStep("form");
       }
     },
     onError: (error: Error) => {
