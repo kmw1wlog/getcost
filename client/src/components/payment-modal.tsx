@@ -50,6 +50,18 @@ export function PaymentModal({ dataset, isOpen, onClose }: PaymentModalProps) {
   const [step, setStep] = useState<"form" | "processing" | "success">("form");
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
+  const buildGoodname = (name: string) => {
+    try {
+      const safeName = name || "상품";
+      const firstLabel = safeName.length > 16 ? safeName.slice(0, 16) : safeName;
+      const combined = `${firstLabel}`;
+      return combined.length > 20 ? combined.slice(0, 20) : combined;
+    } catch (error) {
+      console.error("Failed to build payment goodname", error);
+      return "상품";
+    }
+  };
+
   const form = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
@@ -67,7 +79,7 @@ export function PaymentModal({ dataset, isOpen, onClose }: PaymentModalProps) {
       
       const response = await apiRequest("POST", "/api/payment/request", {
         datasetId: dataset.id,
-        goodName: dataset.nameKo,
+        goodName: buildGoodname(dataset.nameKo),
         price: dataset.price,
         buyerPhone: values.buyerPhone.replace(/-/g, ""),
         receiptType: values.receiptType,

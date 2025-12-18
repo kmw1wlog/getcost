@@ -19,6 +19,18 @@ async function parsePayAppResponse(text: string): Promise<Record<string, string>
   return result;
 }
 
+const buildGoodname = (name: string) => {
+  try {
+    const safeName = name || "상품";
+    const firstLabel = safeName.length > 16 ? safeName.slice(0, 16) : safeName;
+    const combined = `${firstLabel}`;
+    return combined.length > 20 ? combined.slice(0, 20) : combined;
+  } catch (error) {
+    console.error("Failed to build server goodname", error);
+    return "상품";
+  }
+};
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // Setup auth middleware
   await setupAuth(app);
@@ -75,10 +87,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const feedbackUrl = `${req.protocol}://${req.get("host")}/api/payment/callback`;
       
+      const goodName = buildGoodname(validatedData.goodName);
+
       const formData = new URLSearchParams({
         cmd: "payrequest",
         userid: PAYAPP_USER_ID,
-        goodname: validatedData.goodName,
+        goodname: goodName,
         price: validatedData.price.toString(),
         recvphone: validatedData.buyerPhone.replace(/-/g, ""),
         smsuse: "n",
@@ -104,7 +118,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         await storage.createOrder({
           userId,
           datasetId: validatedData.datasetId,
-          goodName: validatedData.goodName,
+          goodName: goodName,
           price: validatedData.price,
           buyerPhone: validatedData.buyerPhone,
           mulNo: result.mul_no,
@@ -200,10 +214,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (existing) {
           await storage.updateOrderStatus(mul_no, "completed", new Date());
         } else if (mul_no) {
+          const fallbackName = buildGoodname(goodname || "장바구니 수동 결제 테스트");
           await storage.createOrder({
             userId: null,
             datasetId: var1 || "manual-test",
-            goodName: goodname || "장바구니 수동 결제 테스트",
+            goodName: fallbackName,
             price: Number(price) || 0,
             buyerPhone: recvphone || "unknown",
             mulNo: mul_no,

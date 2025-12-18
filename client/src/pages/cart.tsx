@@ -35,10 +35,13 @@ export default function CartPage() {
   const buildGoodname = (cartItems: typeof items) => {
     try {
       if (!cartItems.length) return "장바구니 비어 있음";
-      const label = cartItems
-        .map((item) => `${item.name}${item.quantity > 1 ? ` x${item.quantity}` : ""}`)
-        .join(", ");
-      return label.length > 120 ? `${label.slice(0, 117)}...` : label;
+      const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+      const firstName = cartItems[0].name || "장바구니 상품";
+      const firstLabel = firstName.length > 16 ? firstName.slice(0, 16) : firstName;
+      const othersCount = Math.max(totalQuantity - 1, 0);
+      const suffix = othersCount > 0 ? ` 그외+${othersCount}개` : "";
+      const combined = `${firstLabel}${suffix}`;
+      return combined.length > 20 ? combined.slice(0, 20) : combined;
     } catch (error) {
       console.error("Failed to build cart goodname", error);
       return "장바구니 상품";
