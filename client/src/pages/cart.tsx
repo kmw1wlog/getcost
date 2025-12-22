@@ -76,47 +76,68 @@ export default function CartPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-16">
+    <div className="max-w-4xl mx-auto space-y-6 pb-16" data-testid="cart-page">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">장바구니</h1>
+          <h1 className="text-3xl font-bold" data-testid="cart-title">장바구니</h1>
           <p className="text-muted-foreground">선택한 데이터셋을 확인하고 결제를 진행하세요.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setLocation("/home")}>데이터 둘러보기</Button>
-          <Button variant="ghost" onClick={clear}>비우기</Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setLocation("/home")}
+            data-testid="button-browse-data"
+          >
+            데이터 둘러보기
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={clear}
+            data-testid="button-clear-cart"
+          >
+            비우기
+          </Button>
         </div>
       </header>
 
       {items.length === 0 ? (
-        <Card>
+        <Card data-testid="cart-empty">
           <CardContent className="py-10 text-center text-muted-foreground">
             장바구니가 비어 있습니다.
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card data-testid="cart-items-card">
           <CardContent className="p-4 space-y-4">
             {items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-4">
+              <div 
+                key={item.id} 
+                className="flex items-center justify-between gap-4"
+                data-testid={`cart-item-${item.id}`}
+              >
                 <div>
-                  <div className="font-semibold">{item.name}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="font-semibold" data-testid={`cart-item-name-${item.id}`}>{item.name}</div>
+                  <div className="text-sm text-muted-foreground" data-testid={`cart-item-price-${item.id}`}>
                     {new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(item.price)} x {item.quantity}
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => removeItem(item.id)}>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => removeItem(item.id)}
+                  data-testid={`button-remove-${item.id}`}
+                >
                   제거
                 </Button>
               </div>
             ))}
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <div className="text-sm text-muted-foreground">총액</div>
-              <div className="text-xl font-mono font-bold">
+              <div className="text-xl font-mono font-bold" data-testid="cart-total-price">
                 {new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(totalPrice)}
               </div>
             </div>
-            <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4">
+            <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4" data-testid="payment-section">
               <div className="text-sm font-semibold text-primary">결제 금액 입력</div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <label className="flex items-center gap-2 text-sm" htmlFor="payment_amount">
@@ -130,11 +151,13 @@ export default function CartPage() {
                   className="w-[140px]"
                   min="100"
                   disabled={isLoading}
+                  data-testid="input-payment-amount"
                 />
                 <Button 
                   onClick={handleCreemPay} 
                   className="sm:flex-1"
                   disabled={isLoading}
+                  data-testid="button-pay"
                 >
                   {isLoading ? (
                     <>

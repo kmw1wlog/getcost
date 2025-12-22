@@ -168,15 +168,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/creem/webhook", async (req, res) => {
+  app.post("/api/creem/webhook", async (req: any, res) => {
     try {
       const signature = req.headers["x-creem-signature"] as string;
       
       if (CREEM_WEBHOOK_SECRET && signature) {
-        const payload = JSON.stringify(req.body);
+        const rawBody = req.rawBody;
+        if (!rawBody) {
+          console.error("No raw body available for signature verification");
+          return res.status(400).send("No raw body");
+        }
+        
         const expectedSignature = crypto
           .createHmac("sha256", CREEM_WEBHOOK_SECRET)
-          .update(payload)
+          .update(rawBody)
           .digest("hex");
         
         if (signature !== expectedSignature) {
