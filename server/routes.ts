@@ -86,9 +86,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           name: validatedData.goodName,
           description: `결제 금액: ${validatedData.amount.toLocaleString()}원`,
           price: validatedData.amount,
-          currency: "KRW",
-          billing_type: "one_time",
-          tax_mode: "inclusive",
+          currency: "USD",
+          billing_type: "one-time",
         }),
       });
 
