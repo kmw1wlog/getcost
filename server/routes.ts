@@ -2,28 +2,28 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { paymentRequestSchema, cashReceiptSchema, datasets } from "@shared/schema";
+import { datasets } from "@shared/schema";
 import { z } from "zod";
+import crypto from "crypto";
 
-const PAYAPP_API_URL = "https://api.payapp.kr/oapi/apiLoad.html";
-const PAYAPP_USER_ID = process.env.PAYAPP_USER_ID || "payapp_test_id";
+const CREEM_API_URL = "https://api.creem.io/v1";
+const CREEM_API_KEY = process.env.CREEM_API_KEY || "";
+const CREEM_WEBHOOK_SECRET = process.env.CREEM_WEBHOOK_SECRET || "";
 
-async function parsePayAppResponse(text: string): Promise<Record<string, string>> {
-  const result: Record<string, string> = {};
-  for (const item of text.split("&")) {
-    if (item.includes("=")) {
-      const [key, value] = item.split("=", 2);
-      result[key] = decodeURIComponent(value || "");
-    }
-  }
-  return result;
-}
+const creemCheckoutSchema = z.object({
+  amount: z.number().positive(),
+  goodName: z.string(),
+  cartItems: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    quantity: z.number(),
+  })).optional(),
+});
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
-  // Setup auth middleware
   await setupAuth(app);
 
-  // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -35,7 +35,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Dataset routes
   app.get("/api/datasets", (_req, res) => {
     res.json(datasets);
   });
@@ -48,7 +47,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(dataset);
   });
 
-  // Dataset preview/sample data
   app.get("/api/datasets/:id/preview", (req, res) => {
     const dataset = datasets.find((d) => d.id === req.params.id);
     if (!dataset) {
@@ -60,72 +58,100 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // Payment routes
-  app.post("/api/payment/request", async (req: any, res) => {
+  app.post("/api/creem/checkout", async (req: any, res) => {
     try {
-      const validatedData = paymentRequestSchema.parse(req.body);
-      
-      const dataset = datasets.find((d) => d.id === validatedData.datasetId);
-      if (!dataset) {
-        return res.status(404).json({ success: false, message: "Dataset not found" });
+      if (!CREEM_API_KEY) {
+        return res.status(500).json({ 
+          success: false, 
+          message: "CREEM_API_KEY가 설정되지 않았습니다." 
+        });
       }
 
-      // Get user ID if authenticated
+      const validatedData = creemCheckoutSchema.parse(req.body);
       const userId = req.user?.claims?.sub || null;
-
-      const feedbackUrl = `${req.protocol}://${req.get("host")}/api/payment/callback`;
       
-      const formData = new URLSearchParams({
-        cmd: "payrequest",
-        userid: PAYAPP_USER_ID,
-        goodname: validatedData.goodName,
-        price: validatedData.price.toString(),
-        recvphone: validatedData.buyerPhone.replace(/-/g, ""),
-        smsuse: "n",
-        feedbackurl: feedbackUrl,
-        var1: validatedData.datasetId,
-        var2: validatedData.receiptType || "none",
-        var3: validatedData.businessNumber || "",
-      });
+      const baseUrl = process.env.REPLIT_DEPLOYMENT 
+        ? "https://wisedata.ai.kr"
+        : `${req.protocol}://${req.get("host")}`;
+      
+      const requestId = `order_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-      const response = await fetch(PAYAPP_API_URL, {
+      const productResponse = await fetch(`${CREEM_API_URL}/products`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type": "application/json",
+          "x-api-key": CREEM_API_KEY,
         },
-        body: formData.toString(),
+        body: JSON.stringify({
+          name: validatedData.goodName,
+          description: `결제 금액: ${validatedData.amount.toLocaleString()}원`,
+          price: validatedData.amount,
+          currency: "KRW",
+          billing_type: "one_time",
+          tax_mode: "inclusive",
+        }),
       });
 
-      const responseText = await response.text();
-      const result = await parsePayAppResponse(responseText);
-
-      if (result.state === "1") {
-        // Save order to database
-        await storage.createOrder({
-          userId,
-          datasetId: validatedData.datasetId,
-          goodName: validatedData.goodName,
-          price: validatedData.price,
-          buyerPhone: validatedData.buyerPhone,
-          mulNo: result.mul_no,
-          receiptType: validatedData.receiptType || "none",
-          businessNumber: validatedData.businessNumber,
-          paymentStatus: "pending",
-          deliveryStatus: "pending",
-        });
-
-        res.json({
-          success: true,
-          payUrl: result.payurl,
-          mulNo: result.mul_no,
-          message: "결제 요청이 생성되었습니다.",
-        });
-      } else {
-        res.status(400).json({
+      if (!productResponse.ok) {
+        const errorText = await productResponse.text();
+        console.error("Creem product creation failed:", errorText);
+        return res.status(400).json({
           success: false,
-          message: result.msg || "결제 요청에 실패했습니다.",
+          message: "상품 생성에 실패했습니다.",
         });
       }
+
+      const productData = await productResponse.json();
+      const productId = productData.id;
+
+      const checkoutResponse = await fetch(`${CREEM_API_URL}/checkouts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": CREEM_API_KEY,
+        },
+        body: JSON.stringify({
+          request_id: requestId,
+          product_id: productId,
+          success_url: `${baseUrl}/payment/success`,
+          metadata: {
+            userId: userId || "guest",
+            goodName: validatedData.goodName,
+            amount: validatedData.amount,
+            cartItems: JSON.stringify(validatedData.cartItems || []),
+          },
+        }),
+      });
+
+      if (!checkoutResponse.ok) {
+        const errorText = await checkoutResponse.text();
+        console.error("Creem checkout creation failed:", errorText);
+        return res.status(400).json({
+          success: false,
+          message: "체크아웃 생성에 실패했습니다.",
+        });
+      }
+
+      const checkoutData = await checkoutResponse.json();
+
+      await storage.createOrder({
+        userId,
+        datasetId: validatedData.cartItems?.[0]?.id || "cart-payment",
+        goodName: validatedData.goodName,
+        price: validatedData.amount,
+        buyerPhone: "creem-payment",
+        mulNo: requestId,
+        paymentStatus: "pending",
+        deliveryStatus: "pending",
+      });
+
+      res.json({
+        success: true,
+        checkoutUrl: checkoutData.checkout_url,
+        requestId: requestId,
+        message: "결제 페이지로 이동합니다.",
+      });
+
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -134,7 +160,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           errors: error.errors,
         });
       }
-      console.error("Payment request error:", error);
+      console.error("Creem checkout error:", error);
       res.status(500).json({
         success: false,
         message: "서버 오류가 발생했습니다.",
@@ -142,88 +168,54 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.post("/api/payment/callback", async (req, res) => {
+  app.post("/api/creem/webhook", async (req, res) => {
     try {
-      const { mul_no, pay_state, var1, var2, var3 } = req.body;
-
-      if (pay_state === "4") {
-        console.log(`Payment completed for mul_no: ${mul_no}`);
+      const signature = req.headers["x-creem-signature"] as string;
+      
+      if (CREEM_WEBHOOK_SECRET && signature) {
+        const payload = JSON.stringify(req.body);
+        const expectedSignature = crypto
+          .createHmac("sha256", CREEM_WEBHOOK_SECRET)
+          .update(payload)
+          .digest("hex");
         
-        // Update order status
-        const order = await storage.updateOrderStatus(mul_no, "completed", new Date());
-        
-        if (order && var2 && var2 !== "none" && (var2 === "personal" || var2 === "business")) {
-          const idInfo = var2 === "business" ? var3 : order.buyerPhone;
-          const valType = var2 === "business" ? "2" : "1";
-
-          try {
-            await issueCashReceipt({
-              idInfo,
-              price: order.price,
-              valType,
-              goodName: order.goodName,
-              buyerPhone: order.buyerPhone,
-            });
-            console.log("Cash receipt issued successfully");
-          } catch (receiptError) {
-            console.error("Failed to issue cash receipt:", receiptError);
-          }
+        if (signature !== expectedSignature) {
+          console.error("Invalid webhook signature");
+          return res.status(401).send("Invalid signature");
         }
+      }
 
-        // Generate download URL for completed payment
-        if (order) {
-          const dataset = datasets.find(d => d.id === order.datasetId);
-          if (dataset) {
-            // Simulate delivery URL generation
-            const deliveryUrl = `/api/datasets/${order.datasetId}/download?order=${order.id}`;
-            await storage.updateOrderDelivery(order.id, deliveryUrl);
-            console.log(`Delivery URL generated: ${deliveryUrl}`);
+      const event = req.body;
+      console.log("Creem webhook received:", event.type);
+
+      switch (event.type) {
+        case "checkout.completed": {
+          const metadata = event.data?.metadata || {};
+          const requestId = event.data?.request_id;
+          
+          if (requestId) {
+            await storage.updateOrderStatus(requestId, "completed", new Date());
+            console.log(`Payment completed for request_id: ${requestId}`);
           }
+          break;
+        }
+        case "payment.failed": {
+          const requestId = event.data?.request_id;
+          if (requestId) {
+            await storage.updateOrderStatus(requestId, "failed", new Date());
+            console.log(`Payment failed for request_id: ${requestId}`);
+          }
+          break;
         }
       }
 
       res.status(200).send("OK");
     } catch (error) {
-      console.error("Payment callback error:", error);
+      console.error("Creem webhook error:", error);
       res.status(500).send("Error");
     }
   });
 
-  // PayApp Lite feedback (테스트 모드: 금액 검증 스킵)
-  app.post("/api/payapp/feedback", async (req, res) => {
-    try {
-      const { pay_state, price, mul_no, goodname, recvphone, var1 } = req.body;
-
-      if (pay_state === "4") {
-        // 기존 주문이 있으면 완료 처리, 없으면 최소 정보로 생성 후 완료 처리
-        const existing = mul_no ? await storage.getOrderByMulNo(mul_no) : undefined;
-        if (existing) {
-          await storage.updateOrderStatus(mul_no, "completed", new Date());
-        } else if (mul_no) {
-          await storage.createOrder({
-            userId: null,
-            datasetId: var1 || "manual-test",
-            goodName: goodname || "장바구니 수동 결제 테스트",
-            price: Number(price) || 0,
-            buyerPhone: recvphone || "unknown",
-            mulNo: mul_no,
-            paymentStatus: "completed",
-            deliveryStatus: "pending",
-          });
-        }
-
-        console.log(`결제 성공: ${price}원 / 주문번호(mul_no): ${mul_no}`);
-        return res.send("SUCCESS");
-      }
-
-      return res.status(400).send("IGNORED");
-    } catch (error) {
-      console.error("PayApp feedback error:", error);
-      res.status(500).send("Error");
-    }
-  });
-
-  // User orders (purchase history)
   app.get("/api/orders", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -235,7 +227,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Admin routes
   app.get("/api/admin/orders", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -270,41 +261,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Cash receipt issuance
-  app.post("/api/receipt/issue", async (req, res) => {
-    try {
-      const validatedData = cashReceiptSchema.parse(req.body);
-      
-      const result = await issueCashReceipt(validatedData);
-      
-      if (result.success) {
-        res.json({
-          success: true,
-          message: "현금영수증이 발행되었습니다.",
-        });
-      } else {
-        res.status(400).json({
-          success: false,
-          message: result.message || "현금영수증 발행에 실패했습니다.",
-        });
-      }
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          success: false,
-          message: "입력 데이터가 올바르지 않습니다.",
-          errors: error.errors,
-        });
-      }
-      console.error("Receipt issuance error:", error);
-      res.status(500).json({
-        success: false,
-        message: "서버 오류가 발생했습니다.",
-      });
-    }
-  });
-
-  // Dataset search
   app.get("/api/datasets/search", (req, res) => {
     const { q, category } = req.query;
     let results = [...datasets];
@@ -328,38 +284,4 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   return httpServer;
-}
-
-async function issueCashReceipt(data: {
-  idInfo: string;
-  price: number;
-  valType: string;
-  goodName: string;
-  buyerPhone: string;
-}): Promise<{ success: boolean; message?: string }> {
-  const formData = new URLSearchParams({
-    cmd: "cashreceipt_regist",
-    userid: PAYAPP_USER_ID,
-    good_name: data.goodName,
-    buy_tel: data.buyerPhone.replace(/-/g, ""),
-    id_info: data.idInfo.replace(/-/g, ""),
-    price: data.price.toString(),
-    val_type: data.valType,
-  });
-
-  const response = await fetch(PAYAPP_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
-
-  const responseText = await response.text();
-  const result = await parsePayAppResponse(responseText);
-
-  return {
-    success: result.state === "1",
-    message: result.msg,
-  };
 }

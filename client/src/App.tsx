@@ -26,6 +26,7 @@ import Privacy from "@/pages/docs/Privacy";
 import Sla from "@/pages/docs/Sla";
 import SchemaGuide from "@/pages/docs/SchemaGuide";
 import Changelog from "@/pages/docs/Changelog";
+import PaymentSuccess from "@/pages/payment-success";
 import type { Dataset } from "@shared/schema";
 
 function AppContent() {
@@ -100,6 +101,7 @@ function AppContent() {
                   <Route path="/docs/changelog" component={Changelog} />
                   <Route path="/purchases" component={PurchaseHistory} />
                   <Route path="/admin" component={AdminDashboard} />
+                  <Route path="/payment/success" component={PaymentSuccess} />
                   <Route component={NotFound} />
                 </Switch>
                 <FooterBanner />
