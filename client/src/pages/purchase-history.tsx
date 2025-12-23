@@ -52,9 +52,9 @@ export default function PurchaseHistory() {
   }
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("ko-KR", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "KRW",
+      currency: "USD",
     }).format(price);
   };
 

@@ -111,10 +111,9 @@ export function PaymentModal({ dataset, isOpen, onClose }: PaymentModalProps) {
   };
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("ko-KR", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "KRW",
-      maximumFractionDigits: 0,
+      currency: "USD",
     }).format(price);
   };
 

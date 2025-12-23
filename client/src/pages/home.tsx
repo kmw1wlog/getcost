@@ -146,10 +146,9 @@ export default function Home({ selectedDataset, onSelectDataset }: HomeProps) {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-xl font-mono font-bold mb-2">
-                          {new Intl.NumberFormat("ko-KR", {
+                          {new Intl.NumberFormat("en-US", {
                             style: "currency",
-                            currency: "KRW",
-                            maximumFractionDigits: 0,
+                            currency: "USD",
                           }).format(dataset.price)}
                         </div>
                         <Button size="sm">자세히 보기</Button>

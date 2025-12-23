@@ -1,47 +1,34 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/hooks/useCart";
 import { useLocation } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, CreditCard, ShoppingCart } from "lucide-react";
+
+const CREEM_PRODUCT_MAP: Record<string, string> = {
+  "cinematic-camera-motion-kit": "prod_2daxDlFjJ3uDLJPgrBzw20",
+  "hires-3d-modeling-dataset": "prod_5f70m6iE2O43GMuRcIHIWe",
+};
 
 export default function CartPage() {
   const { items, removeItem, clear, totalPrice } = useCart();
   const [, setLocation] = useLocation();
-  const [manualAmount, setManualAmount] = useState<string>("1000");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
 
-  const buildGoodname = (cartItems: typeof items) => {
-    try {
-      if (!cartItems.length) return "장바구니 비어 있음";
-      const [first, ...rest] = cartItems;
-      const restCount = rest.reduce((sum, item) => sum + item.quantity, 0);
-      const suffix = restCount > 0 ? ` 외 ${restCount}건` : "";
-      const summary = `${first.name}${suffix}`;
-      return summary.length > 40 ? `${summary.slice(0, 37)}...` : summary;
-    } catch (error) {
-      console.error("Failed to build cart goodname", error);
-      return "장바구니 상품";
-    }
+  const isPayableItem = (itemId: string) => {
+    return itemId in CREEM_PRODUCT_MAP;
   };
 
-  const cartGoodname = useMemo(() => buildGoodname(items), [items]);
-
-  const handleCreemPay = async () => {
+  const handleCheckout = async (datasetId: string) => {
     try {
-      if (!items.length) {
-        alert("장바구니가 비어 있습니다.");
+      const creemProductId = CREEM_PRODUCT_MAP[datasetId];
+      if (!creemProductId) {
+        alert("해당 상품은 결제가 지원되지 않습니다.");
         return;
       }
 
-      const amount = parseInt(manualAmount, 10);
-      if (isNaN(amount) || amount <= 0) {
-        alert("올바른 금액을 입력해주세요.");
-        return;
-      }
-
-      setIsLoading(true);
+      setLoadingItemId(datasetId);
 
       const response = await fetch("/api/creem/checkout", {
         method: "POST",
@@ -49,14 +36,7 @@ export default function CartPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          amount,
-          goodName: cartGoodname,
-          cartItems: items.map(item => ({
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-          })),
+          datasetId: datasetId,
         }),
       });
 
@@ -66,18 +46,25 @@ export default function CartPage() {
         window.location.href = data.checkoutUrl;
       } else {
         alert(data.message || "결제 요청에 실패했습니다.");
-        setIsLoading(false);
+        setLoadingItemId(null);
       }
     } catch (error) {
       console.error("Payment failed", error);
       alert("결제 처리 중 오류가 발생했습니다.");
-      setIsLoading(false);
+      setLoadingItemId(null);
     }
+  };
+
+  const formatPrice = (price: number, currency: "USD" | "KRW" = "USD") => {
+    if (currency === "USD") {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(price);
+    }
+    return new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(price);
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16" data-testid="cart-page">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-3xl font-bold" data-testid="cart-title">장바구니</h1>
           <p className="text-muted-foreground">선택한 데이터셋을 확인하고 결제를 진행하세요.</p>
@@ -103,74 +90,76 @@ export default function CartPage() {
       {items.length === 0 ? (
         <Card data-testid="cart-empty">
           <CardContent className="py-10 text-center text-muted-foreground">
+            <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
             장바구니가 비어 있습니다.
           </CardContent>
         </Card>
       ) : (
         <Card data-testid="cart-items-card">
           <CardContent className="p-4 space-y-4">
-            {items.map((item) => (
-              <div 
-                key={item.id} 
-                className="flex items-center justify-between gap-4"
-                data-testid={`cart-item-${item.id}`}
-              >
-                <div>
-                  <div className="font-semibold" data-testid={`cart-item-name-${item.id}`}>{item.name}</div>
-                  <div className="text-sm text-muted-foreground" data-testid={`cart-item-price-${item.id}`}>
-                    {new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(item.price)} x {item.quantity}
+            {items.map((item) => {
+              const canPay = isPayableItem(item.id);
+              const isLoading = loadingItemId === item.id;
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-md border border-border"
+                  data-testid={`cart-item-${item.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold" data-testid={`cart-item-name-${item.id}`}>{item.name}</span>
+                      {canPay && (
+                        <Badge variant="secondary">결제 가능</Badge>
+                      )}
+                    </div>
+                    <div className="text-lg font-mono font-bold mt-1" data-testid={`cart-item-price-${item.id}`}>
+                      {formatPrice(item.price, "USD")}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {canPay && (
+                      <Button
+                        onClick={() => handleCheckout(item.id)}
+                        disabled={isLoading || loadingItemId !== null}
+                        data-testid={`button-pay-${item.id}`}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            처리 중...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            결제하기
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => removeItem(item.id)}
+                      disabled={loadingItemId !== null}
+                      data-testid={`button-remove-${item.id}`}
+                    >
+                      제거
+                    </Button>
                   </div>
                 </div>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => removeItem(item.id)}
-                  data-testid={`button-remove-${item.id}`}
-                >
-                  제거
-                </Button>
-              </div>
-            ))}
+              );
+            })}
             <div className="flex items-center justify-between pt-4 border-t border-border">
-              <div className="text-sm text-muted-foreground">총액</div>
+              <div className="text-sm text-muted-foreground">장바구니 총액 (USD)</div>
               <div className="text-xl font-mono font-bold" data-testid="cart-total-price">
-                {new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 }).format(totalPrice)}
+                {formatPrice(totalPrice, "USD")}
               </div>
             </div>
-            <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-4" data-testid="payment-section">
-              <div className="text-sm font-semibold text-primary">결제 금액 입력</div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <label className="flex items-center gap-2 text-sm" htmlFor="payment_amount">
-                  결제 금액 (원)
-                </label>
-                <Input
-                  id="payment_amount"
-                  type="number"
-                  value={manualAmount}
-                  onChange={(e) => setManualAmount(e.target.value)}
-                  className="w-[140px]"
-                  min="100"
-                  disabled={isLoading}
-                  data-testid="input-payment-amount"
-                />
-                <Button 
-                  onClick={handleCreemPay} 
-                  className="sm:flex-1"
-                  disabled={isLoading}
-                  data-testid="button-pay"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      처리 중...
-                    </>
-                  ) : (
-                    "결제하기"
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">입력한 금액으로 카드 결제를 진행합니다.</p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              결제는 상품별로 개별 진행됩니다. "결제 가능" 배지가 있는 상품만 결제할 수 있습니다.
+            </p>
           </CardContent>
         </Card>
       )}

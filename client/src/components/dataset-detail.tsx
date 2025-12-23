@@ -42,10 +42,9 @@ export function DatasetDetail({ dataset, onPurchase }: DatasetDetailProps) {
   const defaultTab = hasModelOutput ? "model-output" : "overview";
   
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("ko-KR", {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "KRW",
-      maximumFractionDigits: 0,
+      currency: "USD",
     }).format(price);
   };
 

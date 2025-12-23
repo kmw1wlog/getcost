@@ -10,15 +10,13 @@ const CREEM_API_URL = "https://api.creem.io/v1";
 const CREEM_API_KEY = process.env.CREEM_API_KEY || "";
 const CREEM_WEBHOOK_SECRET = process.env.CREEM_WEBHOOK_SECRET || "";
 
+const CREEM_PRODUCT_MAP: Record<string, string> = {
+  "cinematic-camera-motion-kit": "prod_2daxDlFjJ3uDLJPgrBzw20",
+  "hires-3d-modeling-dataset": "prod_5f70m6iE2O43GMuRcIHIWe",
+};
+
 const creemCheckoutSchema = z.object({
-  amount: z.number().positive(),
-  goodName: z.string(),
-  cartItems: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    price: z.number(),
-    quantity: z.number(),
-  })).optional(),
+  datasetId: z.string(),
 });
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -70,38 +68,27 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const validatedData = creemCheckoutSchema.parse(req.body);
       const userId = req.user?.claims?.sub || null;
       
+      const creemProductId = CREEM_PRODUCT_MAP[validatedData.datasetId];
+      if (!creemProductId) {
+        return res.status(400).json({
+          success: false,
+          message: "해당 상품은 결제가 지원되지 않습니다.",
+        });
+      }
+
+      const dataset = datasets.find(d => d.id === validatedData.datasetId);
+      if (!dataset) {
+        return res.status(404).json({
+          success: false,
+          message: "데이터셋을 찾을 수 없습니다.",
+        });
+      }
+      
       const baseUrl = process.env.REPLIT_DEPLOYMENT 
         ? "https://wisedata.ai.kr"
         : `${req.protocol}://${req.get("host")}`;
       
       const requestId = `order_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-      const productResponse = await fetch(`${CREEM_API_URL}/products`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": CREEM_API_KEY,
-        },
-        body: JSON.stringify({
-          name: validatedData.goodName,
-          description: `결제 금액: ${validatedData.amount.toLocaleString()}원`,
-          price: validatedData.amount,
-          currency: "USD",
-          billing_type: "one-time",
-        }),
-      });
-
-      if (!productResponse.ok) {
-        const errorText = await productResponse.text();
-        console.error("Creem product creation failed:", errorText);
-        return res.status(400).json({
-          success: false,
-          message: "상품 생성에 실패했습니다.",
-        });
-      }
-
-      const productData = await productResponse.json();
-      const productId = productData.id;
 
       const checkoutResponse = await fetch(`${CREEM_API_URL}/checkouts`, {
         method: "POST",
@@ -111,13 +98,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         },
         body: JSON.stringify({
           request_id: requestId,
-          product_id: productId,
+          product_id: creemProductId,
           success_url: `${baseUrl}/payment/success`,
           metadata: {
             userId: userId || "guest",
-            goodName: validatedData.goodName,
-            amount: validatedData.amount,
-            cartItems: JSON.stringify(validatedData.cartItems || []),
+            datasetId: validatedData.datasetId,
+            goodName: dataset.nameKo,
           },
         }),
       });
@@ -135,9 +121,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       await storage.createOrder({
         userId,
-        datasetId: validatedData.cartItems?.[0]?.id || "cart-payment",
-        goodName: validatedData.goodName,
-        price: validatedData.amount,
+        datasetId: validatedData.datasetId,
+        goodName: dataset.nameKo,
+        price: dataset.price,
         buyerPhone: "creem-payment",
         mulNo: requestId,
         paymentStatus: "pending",
