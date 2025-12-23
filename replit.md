@@ -59,8 +59,8 @@ Preferred communication style: Simple, everyday language.
 - Product ID mapping maintained in `server/routes.ts` via `CREEM_PRODUCT_MAP`
 - Store ID: sto_1LwDcS3U4ORHcjoJulEGvK
 - Two registered products:
-  * "cinematic-camera-motion-kit" -> prod_5St2FaqZLUeTE2xaLSBbNa ($1,610)
-  * "hires-3d-modeling-dataset" -> prod_lRyUKogZi1QwmvxCpc0oC ($850)
+  * "cinematic-camera-motion-kit" -> prod_5St2FaqZLUeTE2xaLSBbNa ($1,465)
+  * "hires-3d-modeling-dataset" -> prod_lRyUKogZi1QwmvxCpc0oC ($770)
 - Configured via `CREEM_API_KEY` and `CREEM_WEBHOOK_SECRET` environment variables
 - Webhook URL: https://wisedata.ai.kr/api/creem/webhook
 
