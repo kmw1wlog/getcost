@@ -54,10 +54,14 @@ Preferred communication style: Simple, everyday language.
 ## External Dependencies
 
 ### Payment Processing
-- **PayApp API** (Korean payment gateway): `https://api.payapp.kr/oapi/apiLoad.html`
-- Handles payment requests via SMS link delivery
-- Supports cash receipt issuance for Korean tax compliance
-- Configured via `PAYAPP_USER_ID` environment variable
+- **Creem API** (Global payment gateway): `https://api.creem.io/v1`
+- Uses pre-registered products with fixed pricing in USD
+- Product ID mapping maintained in `server/routes.ts` via `CREEM_PRODUCT_MAP`
+- Two registered products:
+  * "cinematic-camera-motion-kit" -> prod_2daxDlFjJ3uDLJPgrBzw20 ($1,610)
+  * "hires-3d-modeling-dataset" -> prod_5f70m6iE2O43GMuRcIHIWe ($850)
+- Configured via `CREEM_API_KEY` and `CREEM_WEBHOOK_SECRET` environment variables
+- Webhook URL: https://wisedata.ai.kr/api/creem/webhook
 
 ### Database
 - **PostgreSQL**: Required, configured via `DATABASE_URL` environment variable
