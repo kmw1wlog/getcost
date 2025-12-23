@@ -7,8 +7,8 @@ import { useLocation } from "wouter";
 import { Loader2, CreditCard, ShoppingCart } from "lucide-react";
 
 const CREEM_PRODUCT_MAP: Record<string, string> = {
-  "cinematic-camera-motion-kit": "prod_2daxDlFjJ3uDLJPgrBzw20",
-  "hires-3d-modeling-dataset": "prod_5f70m6iE2O43GMuRcIHIWe",
+  "cinematic-camera-motion-kit": "prod_5St2FaqZLUeTE2xaLSBbNa",
+  "hires-3d-modeling-dataset": "prod_lRyUKogZi1QwmvxCpc0oC",
 };
 
 export default function CartPage() {
